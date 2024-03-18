@@ -12,7 +12,9 @@ import {
 } from "@solana/spl-token-2";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import {
+  ComputeBudgetProgram,
   Keypair,
+  LAMPORTS_PER_SOL,
   PublicKey,
   SystemProgram,
   Transaction,
@@ -201,6 +203,10 @@ const CreateMarket = () => {
 
       mintInstructions.push(
         ...[
+          ComputeBudgetProgram.setComputeUnitLimit({ units: 20_000 }),
+          ComputeBudgetProgram.setComputeUnitPrice({
+            microLamports: 0.00000005 * LAMPORTS_PER_SOL * 10 ** 6,
+          }),
           SystemProgram.createAccount({
             fromPubkey: wallet.publicKey,
             newAccountPubkey: baseMintKeypair.publicKey,
@@ -256,6 +262,10 @@ const CreateMarket = () => {
     // create vaults
     vaultInstructions.push(
       ...[
+        ComputeBudgetProgram.setComputeUnitLimit({ units: 20_000 }),
+        ComputeBudgetProgram.setComputeUnitPrice({
+          microLamports: 0.00000005 * LAMPORTS_PER_SOL * 10 ** 6,
+        }),
         SystemProgram.createAccount({
           fromPubkey: wallet.publicKey,
           newAccountPubkey: marketAccounts.baseVault.publicKey,
@@ -297,6 +307,16 @@ const CreateMarket = () => {
       10 ** quoteMintDecimals *
         Math.pow(10, -1 * data.lotSize) *
         Math.pow(10, -1 * data.tickSize)
+    );
+
+    // Add priority fees
+    marketInstructions.push(
+      ...[
+        ComputeBudgetProgram.setComputeUnitLimit({ units: 50_000 }),
+        ComputeBudgetProgram.setComputeUnitPrice({
+          microLamports: 0.00000002 * LAMPORTS_PER_SOL * 10 ** 6,
+        }),
+      ]
     );
 
     // create market account

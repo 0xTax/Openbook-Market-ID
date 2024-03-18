@@ -63,7 +63,7 @@ export const CLUSTERS: SolanaCluster[] = [
   {
     label: "Devnet",
     network: "devnet",
-    endpoint: clusterApiUrl("devnet"),
+    endpoint: process.env.NEXT_PUBLIC_DEVNET_URL || clusterApiUrl("devnet"),
   },
   {
     label: "Custom RPC",
@@ -88,15 +88,15 @@ export const SolanaProvider = ({ children }: SolanaProviderProps) => {
   }, [cluster, customEndpoint]);
 
   const wallets = useMemo(
-      () => [
-        new PhantomWalletAdapter(),
-        new GlowWalletAdapter(),
-        new SlopeWalletAdapter(),
-        new TorusWalletAdapter(),
-        new BackpackWalletAdapter(),
-        new SolflareWalletAdapter(),
-      ],
-      []
+    () => [
+      new PhantomWalletAdapter(),
+      new GlowWalletAdapter(),
+      new SlopeWalletAdapter(),
+      new TorusWalletAdapter(),
+      new BackpackWalletAdapter(),
+      new SolflareWalletAdapter(),
+    ],
+    []
   );
 
   const isActiveCluster = (selectedCluster: SolanaCluster): boolean => {
@@ -138,7 +138,7 @@ export const SolanaProvider = ({ children }: SolanaProviderProps) => {
   useEffect(() => {
     if (router.query.network) {
       _setCluster(
-          CLUSTERS.filter((c) => c.network === router.query.network)[0]
+        CLUSTERS.filter((c) => c.network === router.query.network)[0]
       );
     } else _setCluster(CLUSTERS[0]);
   }, [router.query.network]);
@@ -154,23 +154,23 @@ export const SolanaProvider = ({ children }: SolanaProviderProps) => {
   }, [router.query.customRPC]);
 
   return (
-      <ConnectionProvider endpoint={endpoint}>
-        <WalletProvider wallets={wallets} autoConnect>
-          <WalletModalProvider>
-            <SolanaContext.Provider
-                value={{
-                  cluster,
-                  setCluster,
-                  customEndpoint,
-                  setCustomEndpoint,
-                  isActiveCluster,
-                }}
-            >
-              {children}
-            </SolanaContext.Provider>
-          </WalletModalProvider>
-        </WalletProvider>
-      </ConnectionProvider>
+    <ConnectionProvider endpoint={endpoint}>
+      <WalletProvider wallets={wallets} autoConnect>
+        <WalletModalProvider>
+          <SolanaContext.Provider
+            value={{
+              cluster,
+              setCluster,
+              customEndpoint,
+              setCustomEndpoint,
+              isActiveCluster,
+            }}
+          >
+            {children}
+          </SolanaContext.Provider>
+        </WalletModalProvider>
+      </WalletProvider>
+    </ConnectionProvider>
   );
 };
 
