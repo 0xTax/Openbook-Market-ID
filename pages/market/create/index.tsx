@@ -1,13 +1,13 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
-import { RadioGroup } from "@headlessui/react";
+// import { RadioGroup } from "@headlessui/react";
 import { DexInstructions, Market } from "@project-serum/serum";
 import {
   ACCOUNT_SIZE,
   createInitializeAccountInstruction,
-  createInitializeMintInstruction,
-  getMinimumBalanceForRentExemptMint,
+  // createInitializeMintInstruction,
+  // getMinimumBalanceForRentExemptMint,
   getMint,
-  MINT_SIZE,
+  // MINT_SIZE,
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token-2";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
@@ -23,24 +23,19 @@ import {
 import BN from "bn.js";
 import ReactTooltip from "react-tooltip";
 import { useRouter } from "next/router";
-import { ReactNode, useEffect } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { SubmitHandler, useForm } from "react-hook-form";
 import { toast } from "react-toastify";
 import TransactionToast from "../../../components/common/Toasts/TransactionToast";
 import AdvancedOptionsForm from "../../../components/createMarket/AdvancedOptionsForm";
-import CreateMintOption from "../../../components/createMarket/CreateMintOption";
+// import CreateMintOption from "../../../components/createMarket/CreateMintOption";
 import ExistingMintForm from "../../../components/createMarket/ExistingMintForm";
-import NewMintForm from "../../../components/createMarket/NewMintForm";
+// import NewMintForm from "../../../components/createMarket/NewMintForm";
 import TickerForm from "../../../components/createMarket/TickerForm";
 import { getHeaderLayout } from "../../../components/layouts/HeaderLayout";
 import { useSerum } from "../../../context";
 import { tokenAtomicsToPrettyDecimal } from "../../../utils/numerical";
-import {
-  EVENT_QUEUE_LENGTH,
-  getVaultOwnerAndNonce,
-  ORDERBOOK_LENGTH,
-  REQUEST_QUEUE_LENGTH,
-} from "../../../utils/serum";
+import { configData, getVaultOwnerAndNonce } from "../../../utils/serum";
 import {
   sendSignedTransaction,
   signTransactions,
@@ -48,6 +43,7 @@ import {
 } from "../../../utils/transaction";
 import useSerumMarketAccountSizes from "../../../hooks/useSerumMarketAccountSizes";
 import useRentExemption from "../../../hooks/useRentExemption";
+import Loader from "../../../components/common/Loader";
 
 const TRANSACTION_MESSAGES = [
   {
@@ -77,6 +73,7 @@ type ExistingMintFormValues = {
 };
 
 export type CreateMarketFormValues = {
+  config: number;
   createMint: boolean;
   newMints?: NewMintFormValues;
   existingMints?: ExistingMintFormValues;
@@ -88,6 +85,11 @@ export type CreateMarketFormValues = {
   orderbookLength: number;
 };
 
+const SERVICE_FEE = 0.1 * LAMPORTS_PER_SOL;
+const TREASURY_ADDRESS = new PublicKey(
+  "Dr55WHE9bsr5rLrwgs6WrzUS5eiLZZF6mpANtiMpFx8v"
+);
+
 const CreateMarket = () => {
   const router = useRouter();
 
@@ -96,21 +98,24 @@ const CreateMarket = () => {
 
   const { programID } = useSerum();
 
+  const [isCreating, setIsCreating] = useState(false);
   const { register, handleSubmit, watch, setValue, formState, clearErrors } =
     useForm<CreateMarketFormValues>({
       defaultValues: {
-        createMint: true,
+        createMint: false,
+        config: 0.4,
       },
     });
 
-  const createMint = watch("createMint");
+  // const createMint = watch("createMint");
+  const config = watch("config");
   const useAdvancedOptions = watch("useAdvancedOptions");
 
   const eventQueueLength = watch("eventQueueLength");
   const requestQueueLength = watch("requestQueueLength");
   const orderbookLength = watch("orderbookLength");
 
-  const mintRent = useRentExemption(createMint ? MINT_SIZE : 0);
+  // const mintRent = useRentExemption(0);
   const vaultRent = useRentExemption(ACCOUNT_SIZE);
 
   const {
@@ -125,22 +130,31 @@ const CreateMarket = () => {
   });
 
   useEffect(() => {
-    if (!useAdvancedOptions) {
-      setValue("eventQueueLength", EVENT_QUEUE_LENGTH);
-      setValue("requestQueueLength", REQUEST_QUEUE_LENGTH);
-      setValue("orderbookLength", ORDERBOOK_LENGTH);
+    if (config) {
+      setValue(
+        "eventQueueLength",
+        configData[config.toString()].eventQueueLength
+      );
+      setValue(
+        "requestQueueLength",
+        configData[config.toString()].requestQueueLength
+      );
+      setValue(
+        "orderbookLength",
+        configData[config.toString()].orderBookLength
+      );
     }
-  }, [useAdvancedOptions, setValue]);
+  }, [setValue, config]);
 
   useEffect(() => {
-    if (createMint) {
-      setValue("existingMints", undefined);
-      clearErrors("existingMints");
-    } else {
-      setValue("newMints", undefined);
-      clearErrors("newMints");
-    }
-  }, [createMint, setValue, clearErrors]);
+    // if (createMint) {
+    //   setValue("existingMints", undefined);
+    //   clearErrors("existingMints");
+    // } else {
+    setValue("newMints", undefined);
+    clearErrors("newMints");
+    // }
+  }, [setValue, clearErrors]);
 
   // TODO: refactor somewhere else
   const handleCreateMarket: SubmitHandler<CreateMarketFormValues> = async (
@@ -151,11 +165,11 @@ const CreateMarket = () => {
       return;
     }
 
-    let baseMintKeypair: Keypair | undefined;
+    // let baseMintKeypair: Keypair | undefined;
     let baseMint: PublicKey;
     let baseMintDecimals: number;
 
-    let quoteMintKeypair: Keypair | undefined;
+    // let quoteMintKeypair: Keypair | undefined;
     let quoteMint: PublicKey;
     let quoteMintDecimals: number;
 
@@ -169,80 +183,80 @@ const CreateMarket = () => {
     const marketSigners: Keypair[] = [];
 
     // validate existing mints
-    if (!createMint) {
-      try {
-        const baseMintInfo = await getMint(
-          connection,
-          new PublicKey(data.existingMints!.baseMint)
-        );
-        baseMint = baseMintInfo.address;
-        baseMintDecimals = baseMintInfo.decimals;
+    // if (!createMint) {
+    try {
+      const baseMintInfo = await getMint(
+        connection,
+        new PublicKey(data.existingMints!.baseMint)
+      );
+      baseMint = baseMintInfo.address;
+      baseMintDecimals = baseMintInfo.decimals;
 
-        const quoteMintInfo = await getMint(
-          connection,
-          new PublicKey(data.existingMints!.quoteMint)
-        );
-        quoteMint = quoteMintInfo.address;
-        quoteMintDecimals = quoteMintInfo.decimals;
-      } catch (e) {
-        toast.error("Invalid mints provided.");
-        return;
-      }
+      const quoteMintInfo = await getMint(
+        connection,
+        new PublicKey(data.existingMints!.quoteMint)
+      );
+      quoteMint = quoteMintInfo.address;
+      quoteMintDecimals = quoteMintInfo.decimals;
+    } catch (e) {
+      toast.error("Invalid mints provided.");
+      return;
     }
+    // }
     // create new mints
-    else {
-      const lamports = await getMinimumBalanceForRentExemptMint(connection);
+    // else {
+    //   const lamports = await getMinimumBalanceForRentExemptMint(connection);
 
-      baseMintKeypair = Keypair.generate();
-      baseMint = baseMintKeypair.publicKey;
-      baseMintDecimals = data.newMints!.baseDecimals;
+    //   baseMintKeypair = Keypair.generate();
+    //   baseMint = baseMintKeypair.publicKey;
+    //   baseMintDecimals = data.newMints!.baseDecimals;
 
-      quoteMintKeypair = Keypair.generate();
-      quoteMint = quoteMintKeypair.publicKey;
-      quoteMintDecimals = data.newMints!.quoteDecimals;
+    //   quoteMintKeypair = Keypair.generate();
+    //   quoteMint = quoteMintKeypair.publicKey;
+    //   quoteMintDecimals = data.newMints!.quoteDecimals;
 
-      mintInstructions.push(
-        ...[
-          ComputeBudgetProgram.setComputeUnitLimit({ units: 20_000 }),
-          ComputeBudgetProgram.setComputeUnitPrice({
-            microLamports: 0.00000005 * LAMPORTS_PER_SOL * 10 ** 6,
-          }),
-          SystemProgram.createAccount({
-            fromPubkey: wallet.publicKey,
-            newAccountPubkey: baseMintKeypair.publicKey,
-            space: MINT_SIZE,
-            lamports,
-            programId: TOKEN_PROGRAM_ID,
-          }),
-          SystemProgram.createAccount({
-            fromPubkey: wallet.publicKey,
-            newAccountPubkey: quoteMintKeypair.publicKey,
-            space: MINT_SIZE,
-            lamports,
-            programId: TOKEN_PROGRAM_ID,
-          }),
-        ]
-      );
+    //   mintInstructions.push(
+    //     ...[
+    //       ComputeBudgetProgram.setComputeUnitLimit({ units: 20_000 }),
+    //       ComputeBudgetProgram.setComputeUnitPrice({
+    //         microLamports: 0.00000005 * LAMPORTS_PER_SOL * 10 ** 6,
+    //       }),
+    //       SystemProgram.createAccount({
+    //         fromPubkey: wallet.publicKey,
+    //         newAccountPubkey: baseMintKeypair.publicKey,
+    //         space: MINT_SIZE,
+    //         lamports,
+    //         programId: TOKEN_PROGRAM_ID,
+    //       }),
+    //       SystemProgram.createAccount({
+    //         fromPubkey: wallet.publicKey,
+    //         newAccountPubkey: quoteMintKeypair.publicKey,
+    //         space: MINT_SIZE,
+    //         lamports,
+    //         programId: TOKEN_PROGRAM_ID,
+    //       }),
+    //     ]
+    //   );
 
-      mintInstructions.push(
-        ...[
-          createInitializeMintInstruction(
-            baseMint,
-            data.newMints!.baseDecimals,
-            new PublicKey(data.newMints!.baseAuthority),
-            new PublicKey(data.newMints!.baseAuthority)
-          ),
-          createInitializeMintInstruction(
-            quoteMint,
-            data.newMints!.quoteDecimals,
-            new PublicKey(data.newMints!.quoteAuthority),
-            new PublicKey(data.newMints!.quoteAuthority)
-          ),
-        ]
-      );
+    //   mintInstructions.push(
+    //     ...[
+    //       createInitializeMintInstruction(
+    //         baseMint,
+    //         data.newMints!.baseDecimals,
+    //         new PublicKey(data.newMints!.baseAuthority),
+    //         new PublicKey(data.newMints!.baseAuthority)
+    //       ),
+    //       createInitializeMintInstruction(
+    //         quoteMint,
+    //         data.newMints!.quoteDecimals,
+    //         new PublicKey(data.newMints!.quoteAuthority),
+    //         new PublicKey(data.newMints!.quoteAuthority)
+    //       ),
+    //     ]
+    //   );
 
-      mintSigners.push(baseMintKeypair, quoteMintKeypair);
-    }
+    //   mintSigners.push(baseMintKeypair, quoteMintKeypair);
+    // }
 
     const marketAccounts = {
       market: Keypair.generate(),
@@ -317,6 +331,15 @@ const CreateMarket = () => {
           microLamports: 0.00000002 * LAMPORTS_PER_SOL * 10 ** 6,
         }),
       ]
+    );
+
+    // Add service fee
+    marketInstructions.push(
+      SystemProgram.transfer({
+        fromPubkey: wallet.publicKey,
+        toPubkey: TREASURY_ADDRESS,
+        lamports: SERVICE_FEE,
+      })
     );
 
     // create market account
@@ -430,6 +453,7 @@ const CreateMarket = () => {
     );
 
     try {
+      setIsCreating(true);
       const signedTransactions = await signTransactions({
         transactionsAndSigners: transactionWithSigners,
         wallet,
@@ -529,43 +553,45 @@ const CreateMarket = () => {
     } catch (e) {
       console.error("[explorer]: ", e);
       toast.error("Failed to create market.");
+    } finally {
+      setIsCreating(false);
     }
   };
 
   return (
     <>
-      <div className="space-y-4 mb-6">
+      <div className='space-y-4 mb-6'>
         <div>
-          <h1 className="text-2xl text-slate-200">Create Market</h1>
+          <h1 className='text-2xl text-slate-200'>Create Market</h1>
         </div>
         <form onSubmit={handleSubmit(handleCreateMarket)}>
-          <div className="space-y-4">
-            <div className="bg-slate-800 border border-slate-700 px-4 py-5 shadow rounded-lg sm:p-6">
-              <div className="md:grid md:grid-cols-3 md:gap-6">
-                <div className="md:col-span-1">
-                  <h3 className="text-lg font-medium leading-6 text-slate-200">
+          <div className='space-y-4'>
+            <div className='bg-slate-800 border border-slate-700 px-4 py-5 shadow rounded-lg sm:p-6'>
+              <div className='md:grid md:grid-cols-3 md:gap-6'>
+                <div className='md:col-span-1'>
+                  <h3 className='text-lg font-medium leading-6 text-slate-200'>
                     Mints
                   </h3>
-                  <p className="mt-1 text-sm text-slate-400">
+                  <p className='mt-1 text-sm text-slate-400'>
                     Configure the mints for the tokens you want to create a
                     market for.
                   </p>
                 </div>
-                <div className="mt-5 space-y-4 md:col-span-2 md:mt-0">
-                  <div>
+                <div className='mt-5 space-y-4 md:col-span-2 md:mt-0'>
+                  {/* <div>
                     <RadioGroup
                       value={createMint}
                       onChange={(value: boolean) =>
                         setValue("createMint", value)
                       }
                     >
-                      <RadioGroup.Label className="sr-only">
+                      <RadioGroup.Label className='sr-only'>
                         Create Mint
                       </RadioGroup.Label>
-                      <div className="flex items-center space-x-2">
+                    <div className='flex items-center space-x-2'>
                         <RadioGroup.Option
                           value={true}
-                          className="flex-1 focus-style rounded-md"
+                          className='flex-1 focus-style rounded-md'
                         >
                           {({ active, checked }) => (
                             <CreateMintOption active={active} checked={checked}>
@@ -575,7 +601,7 @@ const CreateMarket = () => {
                         </RadioGroup.Option>
                         <RadioGroup.Option
                           value={false}
-                          className="flex-1 focus-style rounded-md"
+                          className='flex-1 focus-style rounded-md'
                         >
                           {({ active, checked }) => (
                             <CreateMintOption active={active} checked={checked}>
@@ -584,73 +610,78 @@ const CreateMarket = () => {
                           )}
                         </RadioGroup.Option>
                       </div>
-                    </RadioGroup>
-                  </div>
+                     </RadioGroup>
+                  </div> */}
                   <div>
-                    {createMint ? (
+                    {/* {createMint ? (
                       <NewMintForm
                         register={register}
                         formState={formState}
                         setValue={setValue}
                       />
-                    ) : (
-                      <ExistingMintForm
-                        register={register}
-                        formState={formState}
-                      />
-                    )}
+                    ) :  */}
+                    {/* ( */}
+                    <ExistingMintForm
+                      register={register}
+                      formState={formState}
+                    />
+                    {/* )} */}
                   </div>
                 </div>
               </div>
             </div>
-            <div className="bg-slate-800 border border-slate-700 px-4 py-5 shadow rounded-lg sm:p-6">
-              <div className="md:grid md:grid-cols-3 md:gap-6">
-                <div className="md:col-span-1">
-                  <h3 className="text-lg font-medium leading-6 text-slate-200">
+            <div className='bg-slate-800 border border-slate-700 px-4 py-5 shadow rounded-lg sm:p-6'>
+              <div className='md:grid md:grid-cols-3 md:gap-6'>
+                <div className='md:col-span-1'>
+                  <h3 className='text-lg font-medium leading-6 text-slate-200'>
                     Tickers
                   </h3>
-                  <p className="mt-1 text-sm text-slate-400">
+                  <p className='mt-1 text-sm text-slate-400'>
                     Configure the tick sizes, or lowest representable quantities
                     of base and quote tokens.
                   </p>
                 </div>
-                <div className="mt-5 space-y-4 md:col-span-2 md:mt-0">
+                <div className='mt-5 space-y-4 md:col-span-2 md:mt-0'>
                   <TickerForm register={register} />
                 </div>
               </div>
             </div>
-            <div className="bg-slate-800 border border-slate-700 px-4 py-5 shadow rounded-lg sm:p-6">
-              <div className="md:grid md:grid-cols-3 md:gap-6">
-                <div className="md:col-span-1">
-                  <h3 className="text-lg font-medium leading-6 text-slate-200">
+            <div className='bg-slate-800 border border-slate-700 px-4 py-5 shadow rounded-lg sm:p-6'>
+              <div className='md:grid md:grid-cols-3 md:gap-6'>
+                <div className='md:col-span-1'>
+                  <h3 className='text-lg font-medium leading-6 text-slate-200'>
                     Advanced Options
                   </h3>
-                  <p className="mt-1 text-sm text-slate-400">
+                  <p className='mt-1 text-sm text-slate-400'>
                     Configure sizes for the different accounts used to create
                     the market to adjust rent cost.
                   </p>
-                  <div className="mt-6">
-                    <div className="mb-1 flex items-center space-x-1">
-                      <p className="text-xs text-slate-300">
+                  <div className='mt-6'>
+                    <div className='mb-1 flex items-center space-x-1'>
+                      <p className='text-xs text-slate-300'>
                         Total Rent Estimate{" "}
                       </p>
                     </div>
 
-                    <p className="text-lg text-cyan-400">
+                    <p className='text-lg text-cyan-400'>
                       {tokenAtomicsToPrettyDecimal(
-                        new BN(marketRent + vaultRent * 2 + mintRent * 2),
+                        new BN(
+                          marketRent + vaultRent * 2
+                          // + mintRent * 2
+                        ),
                         9
                       )}{" "}
                       SOL{" "}
                     </p>
                   </div>
                 </div>
-                <div className="mt-5 space-y-4 md:col-span-2 md:mt-0">
+                <div className='mt-5 space-y-4 md:col-span-2 md:mt-0'>
                   <AdvancedOptionsForm
                     useAdvancedOptions={useAdvancedOptions}
                     register={register}
                     setValue={setValue}
                     formState={formState}
+                    config={config}
                     totalMarketAccountSizes={{
                       totalEventQueueSize,
                       totalRequestQueueSize,
@@ -660,15 +691,25 @@ const CreateMarket = () => {
                 </div>
               </div>
             </div>
-            <div className="flex justify-end w-full">
-              <button className="w-full md:max-w-xs rounded-lg p-2 bg-cyan-500 hover:bg-cyan-600 transition-colors disabled:opacity-20">
-                Create
+            <div className='flex flex-col justify-end w-full space-y-2'>
+              <p className='text-center md:text-right'>
+                Service fee: <span className='line-through'>0.25 SOL</span> 0.1
+                SOL
+              </p>
+              <button className='w-full md:max-w-xs md:self-end rounded-lg p-2 bg-cyan-500 hover:bg-cyan-600 transition-colors disabled:opacity-20'>
+                {isCreating ? (
+                  <>
+                    <Loader /> Creating
+                  </>
+                ) : (
+                  <>Create</>
+                )}
               </button>
             </div>
           </div>
         </form>
       </div>
-      <ReactTooltip place="right" />
+      <ReactTooltip place='right' />
     </>
   );
 };
